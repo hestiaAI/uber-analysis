@@ -1,55 +1,64 @@
-import glob
+import fnmatch
+from io import BytesIO
 from pathlib import Path
 from typing import Optional, Tuple
+from zipfile import ZipFile
+
+import numpy as np
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
+
+import portion as P
+from pyexcelerate import Workbook
+
 from custom_types import *
 
-import pandas as pd
-import portion as P
 
-
-def find_file(pattern: str, folder: Path) -> Path:
+def find_file(pattern: str, zf: ZipFile) -> str:
     """
     Looks for a file matching the given pattern inside the given folder
     :param pattern: a glob file pattern
-    :param folder: a path leading to a folder where the pattern should be applied
+    :param zf: a ZipFile object where the file should be searched
     :return: a path to the first file matching the pattern, or a value error if none.
     """
-    matches = glob.glob(pattern, root_dir=folder)
+    matches = fnmatch.filter(zf.namelist(), pattern)
     if len(matches) == 0:
-        raise ValueError(f'Could not find file {pattern} in {folder}')
+        raise ValueError(f'Could not find file {pattern} in {zf.filename}')
     elif len(matches) > 1:
-        print(f'Found many matches for {pattern} in {folder}. Using the first.')
-    return folder / matches[0]
+        print(f'Found many matches for {pattern} in {zf.filename}. Using the first.')
+    return matches[0]
 
 
-def find_table(pattern: str, folder: Path, usecols: Optional[list[str]] = None) -> Table['file': str]:
+def find_table(pattern: str, zf: ZipFile, usecols: Optional[list[str]] = None) -> Table['file': str]:
     """
     Looks inside folder for a csv-like file whose name matches the pattern, and only reads the specified columns.
     If found, reads it and assigns the file name as a column.
     :param pattern: a glob file pattern
-    :param folder: a path leading to a folder where the pattern should be applied
+    :param zf: a ZipFile object where the table should be found
     :param usecols: an optional list of columns present in the data file, only they will be loaded
     :return: a Table (a.k.a. pandas DataFrame) having the specified columns and the file name as a column.
     """
-    file = find_file(pattern, folder)
-    table = pd.read_csv(file, usecols=usecols)
+    filename = find_file(pattern, zf)
+    print(f'Inner file open')
+    with zf.open(filename, 'r') as f:
+        table = pd.read_csv(BytesIO(f.read()), usecols=usecols)
+    print(f'Inner file closed')
     if usecols is not None:
         table = table[usecols]
-    return table.assign(file=file.name)
+    return table.assign(file=filename)
 
 
-def find_date_range(pattern: str, folder: Path, date_cols: list[str]) -> (Timestamp, Timestamp):
+def find_date_range(pattern: str, zf: ZipFile, date_cols: list[str]) -> (Timestamp, Timestamp):
     """
 
     :param pattern: a glob file pattern
-    :param folder: a path leading to a folder where the pattern should be applied
+    :param zf: a ZipFile object where the table should be found
     :param date_cols: a list of column names that are dates
     :return: the minimum and maximum observed dates
     Usage:
     find_date_range('*Driver Trip Status.csv', data_folder / 'Brice' / 'raw' / 'SAR',
                     ['begin_timestamp_local', 'end_timestamp_local'])
     """
-    df = find_table(pattern, folder, usecols=date_cols)
+    df = find_table(pattern, zf, usecols=date_cols)
     for c in date_cols:
         df[c] = pd.to_datetime(df[c])
     return df[date_cols].min().min(), df[date_cols].max().max()
@@ -65,11 +74,17 @@ def scaled_interval(begin: Timestamp, end: Timestamp, attributes: dict, og_durat
             **{k: v * (end - begin) / og_duration if isinstance(v, float) else v for k, v in attributes.items()}}
 
 
-def save_excel(filename: str | Path, sheets: dict[str, pd.DataFrame], **kwargs):
-    """"""
-    with pd.ExcelWriter(filename) as writer:
-        for name, sheet in sheets.items():
-            sheet.to_excel(writer, sheet_name=name, **kwargs)
+def save_excel(filename: str | Path, sheets: dict[str, pd.DataFrame], float_format: str = '%.2f'):
+    """Saves the given dictionary of dataframes as an Excel (xlsx) file."""
+    wb = Workbook()
+    for name, sheet in sheets.items():
+        for col in filter(lambda c: is_datetime(sheet[c]), sheet.columns):
+            sheet[col] = sheet[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+        for col in sheet.select_dtypes(include=[np.float]).columns:
+            sheet[col] = sheet[col].apply(lambda f: '-' if np.isnan(f) or f == 0 else float_format.format(f))
+        wb.new_sheet(name, data=[sheet.columns.tolist(), ] + sheet.values.tolist())
+        del sheet[name]
+    wb.save(filename)
 
 
 def select(d: dict[str], keep: Optional[list[str]] = None, drop: Optional[list[str]] = None) -> dict[str]:
