@@ -1,8 +1,8 @@
-import datetime
+import datetime as dt
 
 import pandas as pd
 
-Timestamp = datetime.datetime
+Timestamp = dt.datetime
 
 
 class Table(pd.DataFrame):

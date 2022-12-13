@@ -5,9 +5,8 @@ from typing import Optional, Tuple
 from zipfile import ZipFile
 
 import numpy as np
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
-
 import portion as P
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pyexcelerate import Workbook
 
 from custom_types import *
@@ -38,10 +37,10 @@ def find_table(pattern: str, zf: ZipFile, usecols: Optional[list[str]] = None) -
     :return: a Table (a.k.a. pandas DataFrame) having the specified columns and the file name as a column.
     """
     filename = find_file(pattern, zf)
-    print(f'Inner file open')
+    print(f'Inner file {filename} open')
     with zf.open(filename, 'r') as f:
         table = pd.read_csv(BytesIO(f.read()), usecols=usecols)
-    print(f'Inner file closed')
+    print(f'Inner file {filename} closed')
     if usecols is not None:
         table = table[usecols]
     return table.assign(file=filename)
@@ -64,8 +63,8 @@ def find_date_range(pattern: str, zf: ZipFile, date_cols: list[str]) -> (Timesta
     return df[date_cols].min().min(), df[date_cols].max().max()
 
 
-def date_range(from_date: Tuple[int, ...], to_date: Tuple[int, ...]) -> list[datetime.date]:
-    return list(pd.date_range(datetime.date(*from_date), datetime.date(*to_date)).values)
+def date_range(from_date: Tuple[int, ...], to_date: Tuple[int, ...]) -> list[Timestamp]:
+    return list(pd.date_range(dt.date(*from_date), dt.date(*to_date)).values)
 
 
 def scaled_interval(begin: Timestamp, end: Timestamp, attributes: dict, og_duration) -> dict:
@@ -74,30 +73,29 @@ def scaled_interval(begin: Timestamp, end: Timestamp, attributes: dict, og_durat
             **{k: v * (end - begin) / og_duration if isinstance(v, float) else v for k, v in attributes.items()}}
 
 
-def save_excel(filename: str | Path, sheets: dict[str, pd.DataFrame], float_format: str = '%.2f'):
+def save_excel(filename: str | Path, sheets: dict[str, pd.DataFrame], float_format: str = '.2f'):
     """Saves the given dictionary of dataframes as an Excel (xlsx) file."""
     wb = Workbook()
     for name, sheet in sheets.items():
-        for col in filter(lambda c: is_datetime(sheet[c]), sheet.columns):
-            sheet[col] = sheet[col].dt.strftime('%Y-%m-%d %H:%M:%S')
-        for col in sheet.select_dtypes(include=[np.float]).columns:
-            sheet[col] = sheet[col].apply(lambda f: '-' if np.isnan(f) or f == 0 else float_format.format(f))
+        for c in filter(lambda c: is_datetime(sheet[c]), sheet.columns):
+            sheet[c] = sheet[c].dt.strftime('%Y-%m-%d %H:%M:%S')
+        for c in sheet.select_dtypes(include=[np.float]).columns:
+            sheet[c] = sheet[c].apply(lambda f: '-' if np.isnan(f) or f == 0 else ('{:' + float_format + '}').format(f))
         wb.new_sheet(name, data=[sheet.columns.tolist(), ] + sheet.values.tolist())
-        del sheet[name]
     wb.save(filename)
 
 
 def select(d: dict[str], keep: Optional[list[str]] = None, drop: Optional[list[str]] = None) -> dict[str]:
     assert (keep is None) != (drop is None), 'Only one of keep or drop can be specified'
     if keep is not None:
-        return {k: v for k, v in d.items() if k in keep}
+        return {k: d[k] for k in keep}
     if drop is not None:
         return {k: v for k, v in d.items() if k not in drop}
 
 
 def find_week_limits(date: Timestamp) -> str:
-    week_start = date - datetime.timedelta(days=date.weekday())
-    week_end = week_start + datetime.timedelta(days=6)
+    week_start = date - dt.timedelta(days=date.weekday())
+    week_end = week_start + dt.timedelta(days=6)
     return f'{week_start.date()} to {week_end.date()}'.replace('-', '/').replace('to', '-')
 
 
