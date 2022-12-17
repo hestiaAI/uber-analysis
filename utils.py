@@ -80,7 +80,7 @@ def save_excel(filename: str | Path, sheets: dict[str, pd.DataFrame], float_form
         for c in filter(lambda c: is_datetime(sheet[c]), sheet.columns):
             sheet[c] = sheet[c].dt.strftime('%Y-%m-%d %H:%M:%S')
         for c in sheet.select_dtypes(include=[np.float]).columns:
-            sheet[c] = sheet[c].apply(lambda f: '-' if np.isnan(f) or f == 0 else ('{:' + float_format + '}').format(f))
+            sheet[c] = sheet[c].apply(lambda f: 0 if np.isnan(f) else round(f, 2))
         wb.new_sheet(name, data=[sheet.columns.tolist(), ] + sheet.values.tolist())
     wb.save(filename)
 
