@@ -6,4 +6,4 @@ Another notebook containing previous work done by Emmanuel can be found in the h
 
 
 ## Installation
-A Python envrionment can be setup using conda based on the `environment.yml
+A Python envrionment can be setup using conda based on the `environment.yml` file.
