@@ -9,7 +9,7 @@ import portion as P
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from pyexcelerate import Workbook
 
-from custom_types import *
+from src.custom_types import *
 
 
 def find_file(pattern: str, zf: ZipFile) -> str:
