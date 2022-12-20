@@ -6,8 +6,11 @@ Another notebook containing previous work done by Emmanuel can be found in the h
 
 
 ## Setting-up
-A Python environment can be setup using conda based on the `environment.yml` file:
+A Python environment can be easily setup using conda based on the `environment.yml` file:
 1. install conda following [these instructions](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)
 2. create an environment using `conda env create --file=environment.yaml`
 3. activate the environment using `conda activate hestia-uber-analysis`
-4. to run `Uber Analysys.ipynb`, use the command `jupyter notebook`
+
+Then , you can simply run `jupyter notebook` and open `Uber Analysys.ipynb`.
+
+If you don't use conda, you can create an environment with venv using the correct Python version (the one specified in `environment.yml`), and run `pip install jupyter numpy pandas portion pyexcelerate geopy`. 
