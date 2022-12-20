@@ -1,4 +1,4 @@
-name: hestia
+name: hestia-uber-analysis
 channels:
   - conda-forge
   - defaults
