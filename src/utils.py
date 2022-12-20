@@ -4,10 +4,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 from zipfile import ZipFile
 
-import numpy as np
 import portion as P
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
-from pyexcelerate import Workbook
 
 from src.custom_types import *
 
@@ -73,16 +70,12 @@ def scaled_interval(begin: Timestamp, end: Timestamp, attributes: dict, og_durat
             **{k: v * (end - begin) / og_duration if isinstance(v, float) else v for k, v in attributes.items()}}
 
 
-def save_excel(filename: str | Path, sheets: dict[str, pd.DataFrame], float_format: str = '.2f'):
+def save_excel(filename: str | Path, sheets: dict[str, pd.DataFrame], float_format='%.2f', **kwargs):
     """Saves the given dictionary of dataframes as an Excel (xlsx) file."""
-    wb = Workbook()
-    for name, sheet in sheets.items():
-        for c in filter(lambda c: is_datetime(sheet[c]), sheet.columns):
-            sheet[c] = sheet[c].dt.strftime('%Y-%m-%d %H:%M:%S')
-        for c in sheet.select_dtypes(include=[np.float]).columns:
-            sheet[c] = sheet[c].apply(lambda f: 0 if np.isnan(f) else round(f, 2))
-        wb.new_sheet(name, data=[sheet.columns.tolist(), ] + sheet.values.tolist())
-    wb.save(filename)
+    """"""
+    with pd.ExcelWriter(filename) as writer:
+        for name, sheet in sheets.items():
+            sheet.to_excel(writer, sheet_name=name, float_format=float_format, **kwargs)
 
 
 def select(d: dict[str], keep: Optional[list[str]] = None, drop: Optional[list[str]] = None) -> dict[str]:
