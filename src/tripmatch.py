@@ -110,16 +110,42 @@ def load_sar(zip_path: Path, timezone: str = 'Europe/Zurich') -> Table:
 def date_in_interval(date, interval_begin, interval_end):
     return interval_begin <= date and date <= interval_end
 
-def next_trip_including_date(date, lifetime_trips_generator):
-    while rowtuple := next(lifetime_trips_generator):
+def next_interval_including_date(date, intervals_generator):
+    # generator must be sorted in ascending order of begin date
+    try:
+        while rowtuple := next(intervals_generator):
+            row = rowtuple[1]
+            if date_in_interval(date, row.begin, row.end):
+                return row
+            elif date < row.begin :
+                return None
+    except StopIteration:
+        pass
+    return None
+
+def intervals_including_date(date, intervals_dataframe):
+    ids = intervals_dataframe.sort_values(by=['begin'],
+                                          ascending=True)
+    for rowtuple in ids.iterrows():
         row = rowtuple[1]
         if date_in_interval(date, row.begin, row.end):
-            print('in interval')
-            return row
+            yield row
         elif date < row.begin:
-            print('before interval')
             return None
-    return None
+
+def dated_rows_from_intervals(intervals_dataframe):
+    ids = intervals_dataframe.sort_values(by=['begin'],
+                                          ascending=True)
+    for rowtuple in ids.iterrows():
+        row = rowtuple[1]
+        yield {'date': row['begin'],
+               'row': row,
+               'lat': row['begin_lat'],
+               'lng': row['begin_lng']}
+        yield {'date': row['end'],
+               'row': row,
+               'lat': row['end_lat'],
+               'lng': row['end_lng']}
 
 if __name__ == "__main__":
     file_name = sys.argv[1]
@@ -132,15 +158,17 @@ if __name__ == "__main__":
         lifetime_trips = load_lifetime_trips(zf, timezone)
         # on_off = load_on_off(zf, timezone)
 
-    ltrips_sorted = lifetime_trips.sort_values(by=['begin'])
+    ltrips_sorted = lifetime_trips.sort_values(by=['begin'],
+                                               ascending=True)
     ltrips_generator = ltrips_sorted.iterrows()
     # lrow = next(ltrips_generator)[1]
     # print(lrow['begin'])
 
     date = pd.to_datetime('2022-11-05T00:42:00+0100')
+
     # on_off_sorted = on_off.sort_values(by=['begin'])
     # on_off_generator = on_off_sorted.iterrows()
     # orow = next(on_off_generator)[1]
     # print(orow['begin'])
-    r = next_trip_including_date(date, ltrips_generator)
+    r = next_interval_including_date(date, ltrips_generator)
     print('next', r)

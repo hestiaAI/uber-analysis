@@ -3,7 +3,7 @@ import unittest
 import pandas as pd
 import os
 
-from ..utils import save_excel
+from src.utils import save_excel
 
 test_excel_filename = 'test-excel.xlsx'
 
