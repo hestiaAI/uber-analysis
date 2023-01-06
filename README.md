@@ -27,6 +27,10 @@ If you don't use conda, you can create an environment with venv using the correc
 ``` sh
 python3 -m venv ./myenv
 source ./myenv/bin/activate
+# on windows 
+./myenv/Scripts/activate.bat
+# in git bash for windows
+source ./myenv/Scripts/activate
 ```
 
 and run 
@@ -42,3 +46,10 @@ ipython kernel install --user --name=myenv
 Then, you can run `jupyter notebook` and open `Pipeline.ipynb`.
 
 Don't forget to select the kernel from the python notebook by clicking **Kernel > Change Kernel > myenv**
+
+## Runnings scripts and tests
+
+``` sh
+python3 -m src.tripmatch [path to sar zip]
+python3 -m src.test_tripmatch
+```

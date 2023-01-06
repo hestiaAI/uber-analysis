@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-import sys
-# sorry I'm copy pasting from the notebook
-# jupyter drives me crazy
+"""
+Sorry I'm copy-pasting from the notebook.
+Jupyter is too uncomfortable.
+"""
+import pandas as pd
+from pathlib import Path
 
-import math
-import os
-import re
-from configparser import ConfigParser
+import sys
+
+# import math
+# import os
+# import re
+# from configparser import ConfigParser
 from typing import Callable, Any
 
 import geopy.distance
@@ -107,8 +112,10 @@ def load_sar(zip_path: Path, timezone: str = 'Europe/Zurich') -> Table:
     print(f'Zip closed')
     return pd.concat([lifetime_trips, on_off]).reset_index(drop=True)
 
+
 def date_in_interval(date, interval_begin, interval_end):
     return interval_begin <= date and date <= interval_end
+
 
 def next_interval_including_date(date, intervals_generator):
     # generator must be sorted in ascending order of begin date
@@ -117,13 +124,15 @@ def next_interval_including_date(date, intervals_generator):
             row = rowtuple[1]
             if date_in_interval(date, row.begin, row.end):
                 return row
-            elif date < row.begin :
+            elif date < row.begin:
                 return None
     except StopIteration:
         pass
     return None
 
-def intervals_including_date(date, intervals_dataframe):
+
+def intervals_including_date_old(date, intervals_dataframe):
+    """Generator that returns all intervals that include date."""
     ids = intervals_dataframe.sort_values(by=['begin'],
                                           ascending=True)
     for rowtuple in ids.iterrows():
@@ -133,28 +142,61 @@ def intervals_including_date(date, intervals_dataframe):
         elif date < row.begin:
             return None
 
-def dated_rows_from_intervals(intervals_dataframe):
+
+def intervals_including_date(date, intervals_dataframe):
+    """Generator that returns all intervals that include date."""
     ids = intervals_dataframe.sort_values(by=['begin'],
                                           ascending=True)
+    intervals_df = ids[(ids['begin'] <= date) & (date <= ids['end'])]
+    return (r for (i, r) in intervals_df.iterrows())
+
+
+def datlocated_rows_from_intervals(intervals_dataframe):
+    """
+    Generator to return rows with a single date and location.
+
+    One row with fields begin, begin_lat, begin_lng, end, end_lat, end_lng
+    is returned as two values with date, lat, lng, is_begin.
+    """
+    ids = intervals_dataframe
+    # ids = intervals_dataframe.sort_values(by=['begin'],
+    #                                       ascending=True)
     for rowtuple in ids.iterrows():
         row = rowtuple[1]
         yield {'date': row['begin'],
-               'row': row,
+               'is_begin': True,
                'lat': row['begin_lat'],
-               'lng': row['begin_lng']}
+               'lng': row['begin_lng'],
+               'row': row
+               }
         yield {'date': row['end'],
                'row': row,
+               'is_begin': False,
                'lat': row['end_lat'],
                'lng': row['end_lng']}
 
-if __name__ == "__main__":
-    file_name = sys.argv[1]
-    in_path = "/home/andre/workspace/uber-data/02-method/" + file_name
-    timezone = "Europe/Zurich"
-    # d = load_sar(in_path, timezone)
 
-    with ZipFile(in_path) as zf:
-        print(f'Zip open')
+def match_dates_to_intervals(dates_dataframe, intervals_dataframe):
+    """Find the datlocs that match time intervals."""
+    for datloc in datlocated_rows_from_intervals(dates_dataframe):
+        date = datloc['date']
+        for interval in intervals_including_date(date, intervals_dataframe):
+            yield (datloc, interval)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Please give a zip file path as argument")
+        exit()
+    zipfile_path = Path(sys.argv[1])
+    if not zipfile_path.exists():
+        print(f'File {zipfile_path} not found')
+        exit()
+
+    timezone = "Europe/Zurich"
+
+    with ZipFile(zipfile_path) as zf:
+        print('Zip open')
         lifetime_trips = load_lifetime_trips(zf, timezone)
         # on_off = load_on_off(zf, timezone)
 
