@@ -148,6 +148,5 @@ class TestTripMatch(unittest.TestCase):
 
         self.assertEqual(correct_matches, matches)
 
-
 if __name__ == '__main__':
     unittest.main()

@@ -184,6 +184,42 @@ def match_dates_to_intervals(dates_dataframe, intervals_dataframe):
             yield (datloc, interval)
 
 
+def interval_equals(series1, series2):
+    """Test for equality of begin and end dates."""
+    begin_equals = series1['begin'] == series2['begin']
+    return begin_equals and series1['end'] == series2['end']
+
+
+def find_matching_date_locations(on_off, lifetime_trips):
+    """Print trips and the locations it includes."""
+    match = None
+    count = 0
+    for loc, trip in match_dates_to_intervals(on_off, lifetime_trips):
+        count += 1
+        if not match or not interval_equals(match['trip'], trip):
+            if match and len(match['locations']) > 1:
+                yield match
+            match = {'trip': trip, 'locations': []}
+        match['locations'].append(loc)
+
+
+def print_matching_date_locations(on_off, lifetime_trips):
+    for match in find_matching_date_locations(on_off, lifetime_trips):
+        trip = match['trip']
+        print(80 * '=')
+        print(trip['begin'], trip['end'], trip['distance_km'])
+        print('')
+        begin_loc = False
+        for loc in match['locations']:
+            print(loc['date'], loc['lat'], loc['lng'], loc['is_begin'])
+            if begin_loc and not loc['is_begin']:
+                # end of a path
+                bird = loc['row']['birdeye_distance_km_x_1.5']
+                print('bird eye * 1.5 = ', bird)
+            begin_loc = loc['is_begin']
+
+        yield match
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Please give a zip file path as argument")
@@ -198,19 +234,18 @@ if __name__ == "__main__":
     with ZipFile(zipfile_path) as zf:
         print('Zip open')
         lifetime_trips = load_lifetime_trips(zf, timezone)
-        # on_off = load_on_off(zf, timezone)
+        on_off = load_on_off(zf, timezone)
 
-    ltrips_sorted = lifetime_trips.sort_values(by=['begin'],
-                                               ascending=True)
-    ltrips_generator = ltrips_sorted.iterrows()
-    # lrow = next(ltrips_generator)[1]
-    # print(lrow['begin'])
+    trip = None
+    print_matching_date_locations(on_off, lifetime_trips)
+    # for oo, lt in match_dates_to_intervals(on_off, lifetime_trips):
+    #     current_trip = lt
+    #     if not trip == current_trip:
+    #         if not trip is None:
+    #             break
+    #         trip = current_trip
+    #         print(80 * '=')
+    #         print(trip['begin'], trip['end'], trip['distance_km'])
+    #         print('')
 
-    date = pd.to_datetime('2022-11-05T00:42:00+0100')
-
-    # on_off_sorted = on_off.sort_values(by=['begin'])
-    # on_off_generator = on_off_sorted.iterrows()
-    # orow = next(on_off_generator)[1]
-    # print(orow['begin'])
-    r = next_interval_including_date(date, ltrips_generator)
-    print('next', r)
+    #     print(oo['date'], oo['lat'], oo['lng'], oo['is_begin'])
