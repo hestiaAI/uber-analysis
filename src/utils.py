@@ -3,6 +3,11 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional, Tuple
 from zipfile import ZipFile
+from typing import Callable, Any
+
+import geopy.distance
+import numpy as np
+import swifter
 
 import portion as P
 
@@ -131,6 +136,79 @@ def main_interval_logic(lt: dict[str, P.interval], oo: dict[str, P.interval], P0
     intervals = interval_merge_logic(lt, oo)
     return pd.concat([interval_to_df(i).assign(status=f'{s} consistent') for s, i in intervals.items()])
 
+
+def time_tuples_to_periods(
+        table: Table['t1': Timestamp, 't2': Timestamp, 't3': Timestamp],
+        columns: list[str],
+        extra_info: list[Callable[[pd.Series], dict]]
+) -> pd.DataFrame:
+    """
+    Takes a dataframe where each row has N timestamps corresponding to instants of status changes,
+    and converts each row into N-1 rows of periods in the corresponding status.
+
+    :param: table: a table having a number N > 1 of time-columns and L of entries.
+    :param: columns: a list of n time-column names present in {table}.
+    :param: extra_info: a list of functions taking a row of df and outputting a dictionary of additional information. Cannot have keys 'begin' and 'end'.
+    :return: periods: a table having L * (N-1) entries, each with a 'begin' and 'end' timestamp and associated information as specified by additional_info.
+    Usage:
+    df = pd.DataFrame([{'request_ts': '3:47 PM', 'begintrip_ts': '4:00 PM', 'dropoff_ts': '4:13 PM'}])
+    columns = ['request_ts', 'begintrip_ts', 'dropoff_ts']
+    extra_info = [lambda r: {'status': 'P2'}, lambda r: {'status': 'P3'}]
+    time_tuples_to_periods(df, columns, extra_info)
+    > begin    end      status
+    > 3:47 PM  4:00 PM  P2
+    > 4:00 PM  4:13 PM  P3
+    """
+    assert len(columns) == len(
+        extra_info) + 1, f'The length of additional information should correspond to the number of generated periods (N-1).'
+    periods = pd.DataFrame(table.swifter.apply(
+        lambda r: [{'begin': r[b], 'end': r[e], **d(r)} for b, e, d in zip(columns, columns[1:], extra_info)],
+        axis=1
+    ).explode().to_list())
+    return periods
+
+def load_on_off(zf: ZipFile, timezone: str, pattern: str = '*Driver Online Offline.csv',
+                birdeye_coefficient: float = 1.5) -> PeriodTable:
+    table = find_table(pattern, zf,
+                       ['begin_timestamp_utc', 'end_timestamp_utc', 'earner_state',
+                        'begin_lat', 'begin_lng', 'end_lat', 'end_lng'])
+    table.rename(columns={'begin_timestamp_utc': 'begin', 'end_timestamp_utc': 'end',
+                          'earner_state': 'status'}, inplace=True)
+    table = table.replace({r'\N': np.nan,
+                           'ontrip': 'P3', 'on trip': 'P3',
+                           'enroute': 'P2', 'en route': 'P2',
+                           'open': 'P1', 'offline': 'P0'})
+    gps_cols = ['begin_lat', 'begin_lng', 'end_lat', 'end_lng']
+    for col in gps_cols:
+        table[col] = table[col].astype(float)
+    for col in ['begin', 'end']:
+        table[col] = pd.to_datetime(table[col], utc=True).dt.tz_convert(timezone)
+    table = table.dropna()
+    table['birdeye_distance_km_x_1.5'] = table.swifter.apply(
+        lambda r: birdeye_coefficient * geopy.distance.geodesic((r['begin_lat'], r['begin_lng']),
+                                                                (r['end_lat'], r['end_lng'])).km, axis=1)
+    # table.drop(columns=gps_cols, inplace=True)
+    return table.dropna()
+
+
+def load_lifetime_trips(zf: ZipFile, timezone: str, pattern: str = '*Driver Lifetime Trips.csv') -> PeriodTable:
+    table = find_table(pattern, zf,
+                       ['request_timestamp_utc', 'begintrip_timestamp_utc', 'dropoff_timestamp_utc', 'status',
+                        'request_to_begin_distance_miles', 'trip_distance_miles', 'original_fare_local'])
+    table = table[table.status == 'completed'].drop(columns='status')
+    table.replace({r'\N': np.nan}, inplace=True)
+    for col in ['request_timestamp_utc', 'begintrip_timestamp_utc', 'dropoff_timestamp_utc']:
+        table[col] = pd.to_datetime(table[col], utc=True).dt.tz_convert(timezone)
+    for col in ['request_to_begin_distance_miles', 'original_fare_local']:
+        table[col] = table[col].astype(float)
+    table = time_tuples_to_periods(
+        table,
+        columns=['request_timestamp_utc', 'begintrip_timestamp_utc', 'dropoff_timestamp_utc'],
+        extra_info=[
+            lambda r: {'status': 'P2', 'distance_km': mile2km(r['request_to_begin_distance_miles']), 'file': r['file']},
+            lambda r: {'status': 'P3', 'distance_km': mile2km(r['trip_distance_miles']), 'file': r['file'],
+                       'uber_paid': r['original_fare_local']}])
+    return table
 
 french_months = {1: 'janvier', 2: 'février', 3: 'mars', 4: 'avril', 5: 'mai', 6: 'juin',
                  7: 'juillet', 8: 'août', 9: 'septembre', 10: 'octobre', 11: 'novembre', 12: 'décembre'}

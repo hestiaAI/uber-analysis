@@ -38,6 +38,13 @@ and run
 pip install jupyter numpy pandas portion pyexcelerate geopy swifter openpyxl
 ```
 
+for the Distance analysis notebook
+
+``` sh
+pip install requests seaborn statsmodels ipynb
+pip install -U scikit-learn
+```
+
 Install jupyter kernel for the virtual environment with
 ``` sh
 ipython kernel install --user --name=myenv
@@ -46,6 +53,24 @@ ipython kernel install --user --name=myenv
 Then, you can run `jupyter notebook` and open `Pipeline.ipynb`.
 
 Don't forget to select the kernel from the python notebook by clicking **Kernel > Change Kernel > myenv**
+
+## Osrm
+To run the notebook "Distance Analysis.ipynb" you need the osrm-backend .
+
+Here's how I got it to run on windows, in powershell ( following the instructions at https://github.com/Project-OSRM/osrm-backend),
+
+with a map for switzerland http://download.geofabrik.de/europe/switzerland-latest.osm.pbf
+
+``` sh
+ docker run -t -v "c:/Users/andre/workspace/hestia/uber-data/data:/data" ghcr.io/project-osrm/osrm-backend osrm-extract -p /opt/car.lua /data/switzerland-latest.osm.pbf
+ 
+ docker run -t -v "c:/Users/andre/workspace/hestia/uber-data/data:/data" ghcr.io/project-osrm/osrm-backend osrm-partition /data/switzerland-latest.osrm
+ 
+ docker run -t -v "c:/Users/andre/workspace/hestia/uber-data/data:/data" ghcr.io/project-osrm/osrm-backend osrm-customize /data/switzerland-latest.osrm
+ 
+docker run -t -i -p 5000:5000 -v "c:/Users/andre/workspace/hestia/uber-data/data:/data" ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/switzerland-latest.osrm
+```
+
 
 ## Runnings scripts and tests
 
